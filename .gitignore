@@ -1,0 +1,34 @@
+# IDE
+.idea/
+.vscode/
+*.iml
+*.sw?
+.DS_Store
+
+# Secrets & credentials
+*.key
+*.pem
+infra/.env
+shell/.env
+.env.local
+.env.*.local
+
+# TLS private keys
+infra/certs/*.key
+
+# Matrix signing key
+infra/matrix/signing.key
+
+# Sensitive docs
+ACCESS.md
+
+# Test artifacts
+shell/test-results/
+shell/playwright-report/
+
+# Build outputs
+shell/dist/
+shell/node_modules/
+
+# Prompt files
+scalenix-os-prompt.md

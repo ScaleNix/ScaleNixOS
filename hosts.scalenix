@@ -1,0 +1,12 @@
+# ScalenixOS — Add these lines to /etc/hosts for local testing
+# sudo bash -c 'cat hosts.scalenix >> /etc/hosts'
+
+127.0.0.1   scalenix.fr
+127.0.0.1   os.scalenix.fr
+127.0.0.1   auth.scalenix.fr
+127.0.0.1   mail.scalenix.fr
+127.0.0.1   files.scalenix.fr
+127.0.0.1   terminal.scalenix.fr
+127.0.0.1   libreoffice.scalenix.fr
+127.0.0.1   rdp.scalenix.fr
+127.0.0.1   traefik.scalenix.fr

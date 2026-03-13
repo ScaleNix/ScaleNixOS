@@ -1,0 +1,22 @@
+services:
+  scalenix-shell:
+    build: !reset null
+    image: node:20-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 3000"
+    volumes:
+      - ../shell:/app
+      - shell-node-modules:/app/node_modules
+    labels:
+      - "traefik.http.services.shell.loadbalancer.server.port=3000"
+    environment:
+      - VITE_KEYCLOAK_URL=https://auth.${DOMAIN}
+      - VITE_KEYCLOAK_REALM=scalenix-os
+      - VITE_KEYCLOAK_CLIENT=scalenix-shell
+      - VITE_ZIMBRA_URL=${ZIMBRA_URL}
+      - VITE_NEXTCLOUD_URL=${NEXTCLOUD_URL}
+      - VITE_XPRA_TERMINAL_URL=${XPRA_TERMINAL_URL}
+      - VITE_XPRA_LO_URL=${XPRA_LO_URL}
+
+volumes:
+  shell-node-modules:

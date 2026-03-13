@@ -1,0 +1,49 @@
+http:
+  middlewares:
+    security-headers:
+      headers:
+        contentSecurityPolicy: >
+          default-src 'self';
+          script-src 'self' 'unsafe-inline' 'unsafe-eval';
+          frame-src
+            https://zimbradev3.ext.benmekki.com
+            https://files.scalenix.fr
+            https://terminal.scalenix.fr
+            https://libreoffice.scalenix.fr
+            https://auth.scalenix.fr
+            https://chat.scalenix.fr
+            https://video.scalenix.fr
+            https://notes.scalenix.fr
+            https://blog.scalenix.fr
+            https://media.scalenix.fr
+            https://photos.scalenix.fr
+            https://grist.scalenix.fr;
+          connect-src 'self'
+            https://zimbradev3.ext.benmekki.com
+            wss://terminal.scalenix.fr
+            wss://libreoffice.scalenix.fr
+            https://media.scalenix.fr
+            https://photos.scalenix.fr;
+          img-src 'self' data: https:;
+          style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+          font-src 'self' https://fonts.gstatic.com
+        frameDeny: false
+        customFrameOptionsValue: "SAMEORIGIN"
+        browserXssFilter: true
+        contentTypeNosniff: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+
+    iframe-allow-scalenix:
+      headers:
+        customResponseHeaders:
+          X-Frame-Options: ""
+          Content-Security-Policy: "frame-ancestors https://os.scalenix.fr"
+
+    forwardauth:
+      forwardAuth:
+        address: "http://oauth2-proxy:4180/oauth2/auth"
+        trustForwardHeader: true
+        authResponseHeaders:
+          - X-Auth-Request-Access-Token
+          - X-Auth-Request-User
+          - X-Auth-Request-Email

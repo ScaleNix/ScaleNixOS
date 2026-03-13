@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ScalenixOS - Visioconférence</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; height: 100vh; display: flex; flex-direction: column; }
+
+    /* Lobby */
+    #lobby { flex: 1; display: flex; align-items: center; justify-content: center; }
+    .lobby-card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; padding: 40px; max-width: 440px; width: 100%; text-align: center; }
+    .lobby-card h1 { font-size: 24px; margin-bottom: 8px; }
+    .lobby-card p { color: #94a3b8; margin-bottom: 24px; font-size: 14px; }
+    .lobby-card input { width: 100%; padding: 12px 16px; border-radius: 8px; border: 1px solid #475569; background: #0f172a; color: #e2e8f0; font-size: 16px; margin-bottom: 16px; outline: none; }
+    .lobby-card input:focus { border-color: #4361ee; }
+    .lobby-card button { width: 100%; padding: 12px; border-radius: 8px; border: none; background: #4361ee; color: white; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+    .lobby-card button:hover { background: #3b52d4; }
+    .lobby-card button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .error { color: #f87171; font-size: 13px; margin-bottom: 12px; }
+
+    /* Room */
+    #room { flex: 1; display: none; flex-direction: column; }
+    #room-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: #1e293b; border-bottom: 1px solid #334155; }
+    #room-header .room-name { font-weight: 600; font-size: 14px; }
+    #room-header .participants { color: #94a3b8; font-size: 13px; }
+    #video-grid { flex: 1; display: grid; gap: 8px; padding: 8px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); overflow: auto; }
+    .video-tile { background: #1e293b; border-radius: 12px; position: relative; overflow: hidden; aspect-ratio: 16/9; display: flex; align-items: center; justify-content: center; }
+    .video-tile video { width: 100%; height: 100%; object-fit: cover; }
+    .video-tile .name-tag { position: absolute; bottom: 8px; left: 8px; background: rgba(0,0,0,0.7); padding: 4px 10px; border-radius: 6px; font-size: 12px; }
+    .video-tile .avatar { width: 80px; height: 80px; border-radius: 50%; background: #4361ee; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 700; }
+
+    /* Controls */
+    #controls { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 12px; background: #1e293b; border-top: 1px solid #334155; }
+    .ctrl-btn { width: 48px; height: 48px; border-radius: 50%; border: none; cursor: pointer; font-size: 20px; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
+    .ctrl-btn.on { background: #334155; color: #e2e8f0; }
+    .ctrl-btn.off { background: #ef4444; color: white; }
+    .ctrl-btn.leave { background: #ef4444; color: white; border-radius: 24px; width: auto; padding: 0 24px; font-size: 14px; font-weight: 600; }
+    .ctrl-btn:hover { filter: brightness(1.15); }
+
+    /* Screen share */
+    .screen-share { grid-column: 1 / -1; aspect-ratio: auto; max-height: 70vh; }
+  </style>
+</head>
+<body>
+  <div id="lobby">
+    <div class="lobby-card">
+      <h1>Visioconference</h1>
+      <p>Rejoignez ou creez une salle de reunion</p>
+      <div id="error" class="error" style="display:none"></div>
+      <input id="room-input" type="text" placeholder="Nom de la salle (ex: reunion-equipe)" value="general">
+      <button id="join-btn" onclick="joinRoom()">Rejoindre</button>
+    </div>
+  </div>
+
+  <div id="room">
+    <div id="room-header">
+      <span class="room-name" id="room-name-display"></span>
+      <span class="participants" id="participant-count"></span>
+    </div>
+    <div id="video-grid"></div>
+    <div id="controls">
+      <button class="ctrl-btn on" id="mic-btn" onclick="toggleMic()" title="Micro">&#x1F3A4;</button>
+      <button class="ctrl-btn on" id="cam-btn" onclick="toggleCam()" title="Camera">&#x1F4F7;</button>
+      <button class="ctrl-btn on" id="screen-btn" onclick="toggleScreen()" title="Partage d'ecran">&#x1F5B5;</button>
+      <button class="ctrl-btn leave" onclick="leaveRoom()">Quitter</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { Room, RoomEvent, Track, VideoPresets, createLocalTracks } from 'https://cdn.jsdelivr.net/npm/livekit-client@2.5.7/+esm';
+
+    let room = null;
+    let localTracks = [];
+    let micEnabled = true;
+    let camEnabled = true;
+    let screenTrack = null;
+
+    // Get Keycloak token from parent shell (passed via URL param or postMessage)
+    function getKeycloakToken() {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('token') || window.__KEYCLOAK_TOKEN || null;
+    }
+
+    window.joinRoom = async function() {
+      const btn = document.getElementById('join-btn');
+      const errorEl = document.getElementById('error');
+      const roomName = document.getElementById('room-input').value.trim() || 'general';
+      errorEl.style.display = 'none';
+      btn.disabled = true;
+      btn.textContent = 'Connexion...';
+
+      try {
+        // Get LiveKit token from our backend
+        const keycloakToken = getKeycloakToken();
+        const headers = { 'Content-Type': 'application/json' };
+        if (keycloakToken) headers['Authorization'] = `Bearer ${keycloakToken}`;
+
+        const res = await fetch('/api/token', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ room: roomName }),
+        });
+        if (!res.ok) throw new Error('Token exchange failed');
+        const { token, url } = await res.json();
+
+        // Connect to LiveKit
+        room = new Room({
+          adaptiveStream: true,
+          dynacast: true,
+          videoCaptureDefaults: { resolution: VideoPresets.h720.resolution },
+        });
+
+        room.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
+        room.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+        room.on(RoomEvent.ParticipantConnected, updateParticipants);
+        room.on(RoomEvent.ParticipantDisconnected, (p) => { removeParticipant(p); updateParticipants(); });
+        room.on(RoomEvent.Disconnected, () => { window.leaveRoom(); });
+
+        await room.connect(url, token);
+
+        // Publish local tracks
+        try {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error('Camera/micro non disponibles. Verifiez que la page est en HTTPS.');
+          }
+          localTracks = await createLocalTracks({ audio: true, video: true });
+        } catch (mediaErr) {
+          console.warn('Camera/micro error:', mediaErr);
+          // Try audio only
+          try {
+            localTracks = await createLocalTracks({ audio: true, video: false });
+            camEnabled = false;
+            document.getElementById('cam-btn').className = 'ctrl-btn off';
+          } catch {
+            // Continue without media — user can enable later
+            localTracks = [];
+          }
+        }
+        for (const track of localTracks) {
+          await room.localParticipant.publishTrack(track);
+        }
+
+        // Show room UI
+        document.getElementById('lobby').style.display = 'none';
+        document.getElementById('room').style.display = 'flex';
+        document.getElementById('room-name-display').textContent = roomName;
+
+        // Add local participant tile
+        addParticipantTile(room.localParticipant, true);
+        updateParticipants();
+
+        // Add existing remote participants
+        room.remoteParticipants.forEach((p) => {
+          addParticipantTile(p, false);
+          p.trackPublications.forEach((pub) => {
+            if (pub.track) attachTrack(pub.track, p);
+          });
+        });
+
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Rejoindre';
+      }
+    };
+
+    function addParticipantTile(participant, isLocal) {
+      const grid = document.getElementById('video-grid');
+      const existing = document.getElementById(`tile-${participant.identity}`);
+      if (existing) return;
+
+      const tile = document.createElement('div');
+      tile.className = 'video-tile';
+      tile.id = `tile-${participant.identity}`;
+
+      const avatar = document.createElement('div');
+      avatar.className = 'avatar';
+      avatar.textContent = (participant.name || participant.identity)[0].toUpperCase();
+      tile.appendChild(avatar);
+
+      const nameTag = document.createElement('div');
+      nameTag.className = 'name-tag';
+      nameTag.textContent = (participant.name || participant.identity) + (isLocal ? ' (vous)' : '');
+      tile.appendChild(nameTag);
+
+      grid.appendChild(tile);
+    }
+
+    function removeParticipant(participant) {
+      const tile = document.getElementById(`tile-${participant.identity}`);
+      if (tile) tile.remove();
+      const screenTile = document.getElementById(`screen-${participant.identity}`);
+      if (screenTile) screenTile.remove();
+    }
+
+    function handleTrackSubscribed(track, publication, participant) {
+      addParticipantTile(participant, false);
+      attachTrack(track, participant);
+    }
+
+    function attachTrack(track, participant) {
+      const isScreen = track.source === Track.Source.ScreenShare;
+      const tileId = isScreen ? `screen-${participant.identity}` : `tile-${participant.identity}`;
+      let tile = document.getElementById(tileId);
+
+      if (isScreen && !tile) {
+        tile = document.createElement('div');
+        tile.className = 'video-tile screen-share';
+        tile.id = tileId;
+        const nameTag = document.createElement('div');
+        nameTag.className = 'name-tag';
+        nameTag.textContent = `${participant.name || participant.identity} - Ecran`;
+        tile.appendChild(nameTag);
+        document.getElementById('video-grid').prepend(tile);
+      }
+
+      if (!tile) return;
+
+      if (track.kind === 'video') {
+        const el = track.attach();
+        el.style.width = '100%';
+        el.style.height = '100%';
+        el.style.objectFit = 'cover';
+        // Remove avatar when video is active
+        const avatar = tile.querySelector('.avatar');
+        if (avatar && !isScreen) avatar.style.display = 'none';
+        tile.insertBefore(el, tile.firstChild);
+      } else if (track.kind === 'audio') {
+        const el = track.attach();
+        el.style.display = 'none';
+        tile.appendChild(el);
+      }
+    }
+
+    function handleTrackUnsubscribed(track, publication, participant) {
+      track.detach().forEach((el) => el.remove());
+      if (track.source === Track.Source.ScreenShare) {
+        const tile = document.getElementById(`screen-${participant.identity}`);
+        if (tile) tile.remove();
+      } else if (track.kind === 'video') {
+        const tile = document.getElementById(`tile-${participant.identity}`);
+        if (tile) {
+          const avatar = tile.querySelector('.avatar');
+          if (avatar) avatar.style.display = 'flex';
+        }
+      }
+    }
+
+    function updateParticipants() {
+      if (!room) return;
+      const count = room.remoteParticipants.size + 1;
+      document.getElementById('participant-count').textContent = `${count} participant${count > 1 ? 's' : ''}`;
+    }
+
+    window.toggleMic = async function() {
+      if (!room) return;
+      micEnabled = !micEnabled;
+      await room.localParticipant.setMicrophoneEnabled(micEnabled);
+      const btn = document.getElementById('mic-btn');
+      btn.className = `ctrl-btn ${micEnabled ? 'on' : 'off'}`;
+    };
+
+    window.toggleCam = async function() {
+      if (!room) return;
+      camEnabled = !camEnabled;
+      await room.localParticipant.setCameraEnabled(camEnabled);
+      const btn = document.getElementById('cam-btn');
+      btn.className = `ctrl-btn ${camEnabled ? 'on' : 'off'}`;
+
+      const tile = document.getElementById(`tile-${room.localParticipant.identity}`);
+      if (tile) {
+        const avatar = tile.querySelector('.avatar');
+        if (avatar) avatar.style.display = camEnabled ? 'none' : 'flex';
+        if (!camEnabled) {
+          tile.querySelectorAll('video').forEach(v => v.remove());
+        }
+      }
+    };
+
+    window.toggleScreen = async function() {
+      if (!room) return;
+      try {
+        if (screenTrack) {
+          await room.localParticipant.unpublishTrack(screenTrack);
+          screenTrack.stop();
+          screenTrack = null;
+          const tile = document.getElementById(`screen-${room.localParticipant.identity}`);
+          if (tile) tile.remove();
+          document.getElementById('screen-btn').className = 'ctrl-btn on';
+        } else {
+          const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+          screenTrack = stream.getVideoTracks()[0];
+          await room.localParticipant.publishTrack(screenTrack, { source: Track.Source.ScreenShare });
+          document.getElementById('screen-btn').className = 'ctrl-btn off';
+          screenTrack.onended = () => window.toggleScreen();
+        }
+      } catch (err) {
+        console.log('Screen share cancelled');
+      }
+    };
+
+    window.leaveRoom = function() {
+      if (room) {
+        room.disconnect();
+        room = null;
+      }
+      localTracks.forEach(t => t.stop());
+      localTracks = [];
+      screenTrack = null;
+      micEnabled = true;
+      camEnabled = true;
+
+      document.getElementById('video-grid').innerHTML = '';
+      document.getElementById('room').style.display = 'none';
+      document.getElementById('lobby').style.display = 'flex';
+      document.getElementById('mic-btn').className = 'ctrl-btn on';
+      document.getElementById('cam-btn').className = 'ctrl-btn on';
+      document.getElementById('screen-btn').className = 'ctrl-btn on';
+    };
+
+    // Auto-join if room param is in URL
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('room')) {
+      document.getElementById('room-input').value = params.get('room');
+    }
+  </script>
+</body>
+</html>

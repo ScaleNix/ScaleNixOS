@@ -1,0 +1,24 @@
+{
+  "default_server_config": {
+    "m.homeserver": {
+      "base_url": "https://matrix.scalenix.fr",
+      "server_name": "scalenix.fr"
+    }
+  },
+  "disable_custom_urls": true,
+  "disable_guests": true,
+  "disable_login_language_selector": false,
+  "disable_3pid_login": true,
+  "brand": "ScalenixOS Chat",
+  "integrations_ui_url": "",
+  "integrations_rest_url": "",
+  "bug_report_endpoint_url": "",
+  "show_labs_settings": false,
+  "default_theme": "dark",
+  "room_directory": {
+    "servers": ["scalenix.fr"]
+  },
+  "setting_defaults": {
+    "breadcrumbs": true
+  }
+}

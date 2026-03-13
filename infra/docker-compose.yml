@@ -1,0 +1,690 @@
+services:
+
+  # ─── Reverse Proxy ──────────────────────────────────────────
+  traefik:
+    image: traefik:v3.0
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - ./certs:/certs:ro
+      - traefik-certs:/letsencrypt
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls=true"
+    networks:
+      - scalenix
+
+  # ─── Keycloak (IdP) ────────────────────────────────────────
+  postgres-keycloak:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KC_DB_PASSWORD}
+    volumes:
+      - pg-keycloak-data:/var/lib/postgresql/data
+    networks:
+      - scalenix
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0
+    restart: unless-stopped
+    command: start --import-realm --features=token-exchange
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres-keycloak:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      KC_HOSTNAME: auth.${DOMAIN}
+      KC_HOSTNAME_STRICT: "false"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+    volumes:
+      - ./keycloak/realm-scalenix.json:/opt/keycloak/data/import/realm.json:ro
+    depends_on:
+      - postgres-keycloak
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.keycloak.rule=Host(`auth.${DOMAIN}`)"
+      - "traefik.http.routers.keycloak.entrypoints=websecure"
+      - "traefik.http.routers.keycloak.tls=true"
+      - "traefik.http.routers.keycloak.middlewares=keycloak-headers"
+      - "traefik.http.middlewares.keycloak-headers.headers.customResponseHeaders.X-Frame-Options="
+      - "traefik.http.middlewares.keycloak-headers.headers.contentSecurityPolicy=frame-ancestors 'self' https://os.${DOMAIN} https://files.${DOMAIN} https://chat.${DOMAIN} https://video.${DOMAIN} https://notes.${DOMAIN} https://blog.${DOMAIN} https://media.${DOMAIN} https://photos.${DOMAIN} https://vault.${DOMAIN} https://code.${DOMAIN} https://draw.${DOMAIN}"
+      - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
+    networks:
+      - scalenix
+
+  # ─── ScalenixOS Shell (Frontend) ───────────────────────────
+  scalenix-shell:
+    build:
+      context: ../shell
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.shell.rule=Host(`os.${DOMAIN}`)"
+      - "traefik.http.routers.shell.entrypoints=websecure"
+      - "traefik.http.routers.shell.tls=true"
+      - "traefik.http.routers.shell.middlewares=security-headers@file,shell-permissions"
+      - "traefik.http.middlewares.shell-permissions.headers.customResponseHeaders.Permissions-Policy=camera=*, microphone=*, display-capture=*"
+      - "traefik.http.services.shell.loadbalancer.server.port=80"
+    networks:
+      - scalenix
+
+  # ─── Nextcloud (Files + OnlyOffice) ────────────────────────
+  postgres-nextcloud:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: ${NC_DB_PASSWORD}
+    volumes:
+      - pg-nextcloud-data:/var/lib/postgresql/data
+    networks:
+      - scalenix
+
+  nextcloud:
+    image: nextcloud:29-apache
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres-nextcloud
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD: ${NC_DB_PASSWORD}
+      NEXTCLOUD_ADMIN_USER: admin
+      NEXTCLOUD_ADMIN_PASSWORD: ${NC_ADMIN_PASSWORD}
+      NEXTCLOUD_TRUSTED_DOMAINS: "files.${DOMAIN}"
+      OVERWRITEPROTOCOL: https
+      OVERWRITEHOST: "files.${DOMAIN}"
+      OVERWRITECLIURL: "https://files.${DOMAIN}"
+    extra_hosts:
+      - "auth.${DOMAIN}:host-gateway"
+    volumes:
+      - nextcloud-data:/var/www/html
+      - ./certs/scalenix-ca.crt:/usr/local/share/ca-certificates/scalenix-ca.crt:ro
+    depends_on:
+      - postgres-nextcloud
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nextcloud.rule=Host(`files.${DOMAIN}`)"
+      - "traefik.http.routers.nextcloud.entrypoints=websecure"
+      - "traefik.http.routers.nextcloud.tls=true"
+      - "traefik.http.routers.nextcloud.middlewares=nextcloud-headers"
+      - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.nextcloud-headers.headers.customResponseHeaders.X-Frame-Options="
+      - "traefik.http.middlewares.nextcloud-headers.headers.customResponseHeaders.Content-Security-Policy=frame-ancestors 'self' https://os.${DOMAIN}"
+    networks:
+      - scalenix
+
+  # ─── OnlyOffice Document Server ────────────────────────────
+  onlyoffice:
+    image: onlyoffice/documentserver:8.0
+    restart: unless-stopped
+    environment:
+      JWT_ENABLED: "false"
+      ALLOW_PRIVATE_IP_ADDRESS: "true"
+    volumes:
+      - onlyoffice-data:/var/www/onlyoffice/Data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.onlyoffice.rule=Host(`files.${DOMAIN}`) && PathPrefix(`/ds-vpath/`)"
+      - "traefik.http.routers.onlyoffice.entrypoints=websecure"
+      - "traefik.http.routers.onlyoffice.tls=true"
+      - "traefik.http.routers.onlyoffice.priority=100"
+      - "traefik.http.middlewares.onlyoffice-strip.stripprefix.prefixes=/ds-vpath"
+      - "traefik.http.middlewares.onlyoffice-headers.headers.customRequestHeaders.X-Forwarded-Proto=https"
+      - "traefik.http.routers.onlyoffice.middlewares=onlyoffice-strip,onlyoffice-headers"
+      - "traefik.http.services.onlyoffice.loadbalancer.server.port=80"
+    networks:
+      - scalenix
+
+  # ─── OAuth2 Proxy (sidecar for non-OIDC apps) ──────────────
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    restart: unless-stopped
+    command: >
+      --provider=keycloak-oidc
+      --oidc-issuer-url=https://auth.${DOMAIN}/realms/scalenix-os
+      --client-id=oauth2-proxy
+      --client-secret=${OAUTH2_PROXY_CLIENT_SECRET}
+      --cookie-secret=${OAUTH2_PROXY_COOKIE_SECRET}
+      --upstream=http://xpra-terminal:14500
+      --http-address=0.0.0.0:4180
+      --email-domain=*
+      --pass-access-token=true
+      --skip-provider-button=true
+      --ssl-insecure-skip-verify=true
+      --cookie-secure=true
+      --redirect-url=https://terminal.${DOMAIN}/oauth2/callback
+    extra_hosts:
+      - "auth.${DOMAIN}:host-gateway"
+    depends_on:
+      - keycloak
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.xpra-terminal.rule=Host(`terminal.${DOMAIN}`)"
+      - "traefik.http.routers.xpra-terminal.entrypoints=websecure"
+      - "traefik.http.routers.xpra-terminal.tls=true"
+      - "traefik.http.services.xpra-terminal.loadbalancer.server.port=4180"
+    networks:
+      - scalenix
+
+  # ─── Xpra Terminal ─────────────────────────────────────────
+  xpra-terminal:
+    build:
+      context: ./docker/xpra-terminal
+    restart: unless-stopped
+    networks:
+      - scalenix
+
+  # ─── Grist (Spreadsheet / Database) ────────────────────────
+  grist:
+    image: gristlabs/grist:1.1
+    restart: unless-stopped
+    environment:
+      APP_HOME_URL: "https://grist.${DOMAIN}"
+      GRIST_SINGLE_ORG: scalenix
+      GRIST_DEFAULT_EMAIL: "malik@scalenix.fr"
+      GRIST_OIDC_IDP_ISSUER: "https://auth.${DOMAIN}/realms/scalenix-os"
+      GRIST_OIDC_IDP_CLIENT_ID: grist
+      GRIST_OIDC_IDP_CLIENT_SECRET: ${GRIST_CLIENT_SECRET}
+      GRIST_OIDC_IDP_SCOPES: "openid profile email"
+      GRIST_OIDC_SP_HTTP_TIMEOUT: "10000"
+      GRIST_OIDC_IDP_SKIP_END_SESSION_ENDPOINT: "true"
+      GRIST_FORCE_LOGIN: "true"
+      GRIST_HIDE_UI_ELEMENTS: "billing"
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"
+    extra_hosts:
+      - "auth.${DOMAIN}:host-gateway"
+    volumes:
+      - grist-data:/persist
+    depends_on:
+      - keycloak
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grist.rule=Host(`grist.${DOMAIN}`)"
+      - "traefik.http.routers.grist.entrypoints=websecure"
+      - "traefik.http.routers.grist.tls=true"
+      - "traefik.http.routers.grist.middlewares=grist-headers"
+      - "traefik.http.middlewares.grist-headers.headers.customResponseHeaders.X-Frame-Options="
+      - "traefik.http.middlewares.grist-headers.headers.contentSecurityPolicy=frame-ancestors https://os.${DOMAIN}"
+      - "traefik.http.services.grist.loadbalancer.server.port=8484"
+    networks:
+      - scalenix
+
+  # ─── Matrix Synapse (Chat server) ──────────────────────────
+  postgres-synapse:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: synapse
+      POSTGRES_USER: synapse
+      POSTGRES_PASSWORD: ${SYNAPSE_DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - pg-synapse-data:/var/lib/postgresql/data
+    networks:
+      - scalenix
+
+  synapse:
+    image: matrixdotorg/synapse:latest
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c", "update-ca-certificates 2>/dev/null; exec python -m synapse.app.homeserver --config-path /data/homeserver.yaml"]
+    environment:
+      SYNAPSE_CONFIG_PATH: /data/homeserver.yaml
+    volumes:
+      - synapse-data:/data
+      - ./matrix/homeserver.yaml:/data/homeserver.yaml:ro
+      - ./matrix/log.config:/data/log.config:ro
+      - ./matrix/signing.key:/data/signing.key:ro
+      - ./certs/scalenix-ca.crt:/usr/local/share/ca-certificates/scalenix-ca.crt:ro
+    extra_hosts:
+      - "auth.${DOMAIN}:host-gateway"
+    depends_on:
+      - postgres-synapse
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.synapse.rule=Host(`matrix.${DOMAIN}`)"
+      - "traefik.http.routers.synapse.entrypoints=websecure"
+      - "traefik.http.routers.synapse.tls=true"
+      - "traefik.http.middlewares.synapse-headers.headers.customResponseHeaders.X-Frame-Options="
+      - "traefik.http.middlewares.synapse-headers.headers.customResponseHeaders.Content-Security-Policy=frame-ancestors 'self' https://os.${DOMAIN}"
+      - "traefik.http.routers.synapse.middlewares=synapse-headers"
+      - "traefik.http.services.synapse.loadbalancer.server.port=8008"
+    networks:
+      - scalenix
+
+  # ─── Element Web (Matrix chat UI) ────────────────────────
+  element-web:
+    image: vectorim/element-web:latest
+    restart: unless-stopped
+    volumes:
+      - ./matrix/element-config.json:/app/config.json:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.element.rule=Host(`chat.${DOMAIN}`)"
+      - "traefik.http.routers.element.entrypoints=websecure"
+      - "traefik.http.routers.element.tls=true"
+      - "traefik.http.middlewares.element-headers.headers.customResponseHeaders.X-Frame-Options="
+      - "traefik.http.middlewares.element-headers.headers.customResponseHeaders.Content-Security-Policy=frame-ancestors 'self' https://os.${DOMAIN}"
+      - "traefik.http.routers.element.middlewares=element-headers"
+      - "traefik.http.services.element.loadbalancer.server.port=80"
+    networks:
+      - scalenix
+
+  # ─── LiveKit Server (WebRTC SFU) ─────────────────────────
+  livekit-server:
+    image: livekit/livekit-server:latest
+    restart: unless-stopped
+    ports:
+      - "7881:7881"
+      - "50000-50100:50000-50100/udp"
+    volumes:
+      - ./livekit/livekit.yaml:/etc/livekit.yaml:ro
+    command: --config /etc/livekit.yaml
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.livekit.rule=Host(`livekit.${DOMAIN}`)"
+      - "traefik.http.routers.livekit.entrypoints=websecure"
+      - "traefik.http.routers.livekit.tls=true"
+      - "traefik.http.services.livekit.loadbalancer.server.port=7880"
+    networks:
+      - scalenix
+
+  # ─── LiveKit Meet (Video conferencing UI + token service) ─
+  livekit-meet:
+    build:
+      context: ./livekit/meet
+    restart: unless-stopped
+    environment:
+      LIVEKIT_API_KEY: "scalenix"
+      LIVEKIT_API_SECRET: "${LIVEKIT_API_SECRET}"
+      LIVEKIT_URL: "wss://livekit.${DOMAIN}"
+      KEYCLOAK_ISSUER: "https://auth.${DOMAIN}/realms/scalenix-os"
+    extra_hosts:
+      - "auth.${DOMAIN}:host-gateway"
+    depends_on:
+      - livekit-server
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.livekit-meet.rule=Host(`video.${DOMAIN}`)"
+      - "traefik.http.routers.livekit-meet.entrypoints=websecure"
+      - "traefik.http.routers.livekit-meet.tls=true"
+      - "traefik.http.middlewares.livekit-meet-headers.headers.customResponseHeaders.X-Frame-Options="
+      - "traefik.http.middlewares.livekit-meet-headers.headers.customResponseHeaders.Content-Security-Policy=frame-ancestors 'self' https://os.${DOMAIN}"
+      - "traefik.http.middlewares.livekit-meet-headers.headers.customResponseHeaders.Permissions-Policy=camera=*, microphone=*, display-capture=*"
+      - "traefik.http.routers.livekit-meet.middlewares=livekit-meet-headers"
+      - "traefik.http.services.livekit-meet.loadbalancer.server.port=3000"
+    networks:
+      - scalenix
+
+  # ─── X2Go LibreOffice ─────────────────────────────────────
+  x2go-libreoffice:
+    build:
+      context: ./docker/x2go-libreoffice
+    restart: unless-stopped
+    environment:
+      NEXTCLOUD_URL: https://files.${DOMAIN}
+      NEXTCLOUD_USER: ${NEXTCLOUD_WEBDAV_USER}
+      NEXTCLOUD_PASSWORD: ${NEXTCLOUD_WEBDAV_PASSWORD}
+    ports:
+      - "2222:22"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.x2go-lo.rule=Host(`libreoffice.${DOMAIN}`)"
+      - "traefik.http.routers.x2go-lo.entrypoints=websecure"
+      - "traefik.http.routers.x2go-lo.tls=true"
+      - "traefik.http.middlewares.x2go-lo-headers.headers.customResponseHeaders.X-Frame-Options="
+      - "traefik.http.middlewares.x2go-lo-headers.headers.customResponseHeaders.Content-Security-Policy=frame-ancestors 'self' https://os.${DOMAIN}"
+      - "traefik.http.routers.x2go-lo.middlewares=x2go-lo-headers"
+      - "traefik.http.services.x2go-lo.loadbalancer.server.port=6080"
+    networks:
+      - scalenix
+
+  # ─── Outline (Notes / Knowledge base) ─────────────────────
+  postgres-outline:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: outline
+      POSTGRES_USER: outline
+      POSTGRES_PASSWORD: ${OUTLINE_DB_PASSWORD}
+    volumes:
+      - pg-outline-data:/var/lib/postgresql/data
+    networks:
+      - scalenix
+
+  redis-outline:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - scalenix
+
+  outline:
+    image: outlinewiki/outline:latest
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      SECRET_KEY: ${OUTLINE_SECRET_KEY}
+      UTILS_SECRET: ${OUTLINE_UTILS_SECRET}
+      DATABASE_URL: postgres://outline:${OUTLINE_DB_PASSWORD}@postgres-outline:5432/outline
+      PGSSLMODE: disable
+      REDIS_URL: redis://redis-outline:6379
+      URL: "https://notes.${DOMAIN}"
+      PORT: "3000"
+      FORCE_HTTPS: "false"
+      FILE_STORAGE: local
+      FILE_STORAGE_LOCAL_ROOT_DIR: /var/lib/outline/data
+      OIDC_CLIENT_ID: outline
+      OIDC_CLIENT_SECRET: ${OUTLINE_OIDC_SECRET}
+      OIDC_AUTH_URI: "https://auth.${DOMAIN}/realms/scalenix-os/protocol/openid-connect/auth"
+      OIDC_TOKEN_URI: "https://auth.${DOMAIN}/realms/scalenix-os/protocol/openid-connect/token"
+      OIDC_USERINFO_URI: "https://auth.${DOMAIN}/realms/scalenix-os/protocol/openid-connect/userinfo"
+      OIDC_LOGOUT_URI: "https://auth.${DOMAIN}/realms/scalenix-os/protocol/openid-connect/logout"
+      OIDC_DISPLAY_NAME: ScalenixOS
+      OIDC_USERNAME_CLAIM: preferred_username
+      OIDC_SCOPES: "openid profile email"
+      NODE_TLS_REJECT_UNAUTHORIZED: "0"
+    extra_hosts:
+      - "auth.${DOMAIN}:host-gateway"
+    volumes:
+      - outline-data:/var/lib/outline/data
+    depends_on:
+      - postgres-outline
+      - redis-outline
+      - keycloak
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.outline.rule=Host(`notes.${DOMAIN}`)"
+      - "traefik.http.routers.outline.entrypoints=websecure"
+      - "traefik.http.routers.outline.tls=true"
+      - "traefik.http.middlewares.outline-headers.headers.customResponseHeaders.X-Frame-Options="
+      - "traefik.http.middlewares.outline-headers.headers.customResponseHeaders.Content-Security-Policy=frame-ancestors 'self' https://os.${DOMAIN}"
+      - "traefik.http.routers.outline.middlewares=outline-headers"
+      - "traefik.http.services.outline.loadbalancer.server.port=3000"
+    networks:
+      - scalenix
+
+  # ─── Ghost (Blog) ────────────────────────────────────────
+  mysql-ghost:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${GHOST_DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ghost
+      MYSQL_USER: ghost
+      MYSQL_PASSWORD: ${GHOST_DB_PASSWORD}
+    volumes:
+      - mysql-ghost-data:/var/lib/mysql
+    networks:
+      - scalenix
+
+  ghost:
+    image: ghost:5-alpine
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      url: "https://blog.${DOMAIN}"
+      database__client: mysql
+      database__connection__host: mysql-ghost
+      database__connection__port: "3306"
+      database__connection__user: ghost
+      database__connection__password: ${GHOST_DB_PASSWORD}
+      database__connection__database: ghost
+    volumes:
+      - ghost-data:/var/lib/ghost/content
+    depends_on:
+      - mysql-ghost
+    networks:
+      - scalenix
+
+  # OAuth2 Proxy for Ghost (Ghost has no native OIDC)
+  oauth2-proxy-ghost:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    restart: unless-stopped
+    command: >
+      --provider=keycloak-oidc
+      --oidc-issuer-url=https://auth.${DOMAIN}/realms/scalenix-os
+      --client-id=ghost
+      --client-secret=${GHOST_OIDC_SECRET}
+      --cookie-secret=${GHOST_COOKIE_SECRET}
+      --upstream=http://ghost:2368
+      --http-address=0.0.0.0:4180
+      --email-domain=*
+      --pass-access-token=true
+      --skip-provider-button=true
+      --ssl-insecure-skip-verify=true
+      --cookie-secure=true
+      --cookie-name=_ghost_proxy
+      --redirect-url=https://blog.${DOMAIN}/oauth2/callback
+    extra_hosts:
+      - "auth.${DOMAIN}:host-gateway"
+    depends_on:
+      - ghost
+      - keycloak
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ghost.rule=Host(`blog.${DOMAIN}`)"
+      - "traefik.http.routers.ghost.entrypoints=websecure"
+      - "traefik.http.routers.ghost.tls=true"
+      - "traefik.http.middlewares.ghost-headers.headers.customResponseHeaders.X-Frame-Options="
+      - "traefik.http.middlewares.ghost-headers.headers.customResponseHeaders.Content-Security-Policy=frame-ancestors 'self' https://os.${DOMAIN}"
+      - "traefik.http.routers.ghost.middlewares=ghost-headers"
+      - "traefik.http.services.ghost.loadbalancer.server.port=4180"
+    networks:
+      - scalenix
+
+  # ─── Jellyfin (Media Server) ─────────────────────────────
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c", "update-ca-certificates 2>/dev/null; exec /jellyfin/jellyfin"]
+    environment:
+      JELLYFIN_PublishedServerUrl: https://media.${DOMAIN}
+    extra_hosts:
+      - "auth.${DOMAIN}:host-gateway"
+    volumes:
+      - jellyfin-config:/config
+      - jellyfin-cache:/cache
+      - jellyfin-media:/media
+      - ./certs/scalenix-ca.crt:/usr/local/share/ca-certificates/scalenix-ca.crt:ro
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jellyfin.rule=Host(`media.${DOMAIN}`)"
+      - "traefik.http.routers.jellyfin.entrypoints=websecure"
+      - "traefik.http.routers.jellyfin.tls=true"
+      - "traefik.http.middlewares.jellyfin-headers.headers.customResponseHeaders.X-Frame-Options="
+      - "traefik.http.middlewares.jellyfin-headers.headers.customResponseHeaders.Content-Security-Policy=frame-ancestors 'self' https://os.${DOMAIN}"
+      - "traefik.http.routers.jellyfin.middlewares=jellyfin-headers"
+      - "traefik.http.services.jellyfin.loadbalancer.server.port=8096"
+    networks:
+      - scalenix
+
+  # ─── Immich (Photo & Video Management) ─────────────────────
+  immich-server:
+    image: ghcr.io/immich-app/immich-server:release
+    restart: unless-stopped
+    environment:
+      DB_HOSTNAME: postgres-immich
+      DB_USERNAME: immich
+      DB_PASSWORD: ${IMMICH_DB_PASSWORD}
+      DB_DATABASE_NAME: immich
+      REDIS_HOSTNAME: redis-immich
+      IMMICH_MACHINE_LEARNING_URL: http://immich-ml:3003
+    extra_hosts:
+      - "auth.${DOMAIN}:host-gateway"
+    volumes:
+      - immich-upload:/usr/src/app/upload
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      - postgres-immich
+      - redis-immich
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.immich.rule=Host(`photos.${DOMAIN}`)"
+      - "traefik.http.routers.immich.entrypoints=websecure"
+      - "traefik.http.routers.immich.tls=true"
+      - "traefik.http.middlewares.immich-headers.headers.customResponseHeaders.X-Frame-Options="
+      - "traefik.http.middlewares.immich-headers.headers.customResponseHeaders.Content-Security-Policy=frame-ancestors 'self' https://os.${DOMAIN}"
+      - "traefik.http.routers.immich.middlewares=immich-headers"
+      - "traefik.http.services.immich.loadbalancer.server.port=2283"
+    networks:
+      - scalenix
+
+  immich-ml:
+    image: ghcr.io/immich-app/immich-machine-learning:release
+    restart: unless-stopped
+    volumes:
+      - immich-model-cache:/cache
+    networks:
+      - scalenix
+
+  postgres-immich:
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: immich
+      POSTGRES_USER: immich
+      POSTGRES_PASSWORD: ${IMMICH_DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    volumes:
+      - pg-immich-data:/var/lib/postgresql/data
+    networks:
+      - scalenix
+
+  redis-immich:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - scalenix
+
+  # ─── Vaultwarden (Password Manager) ──────────────────────
+  vaultwarden:
+    image: vaultwarden/server:latest
+    restart: unless-stopped
+    environment:
+      DOMAIN: "https://vault.${DOMAIN}"
+      SIGNUPS_ALLOWED: "true"
+      ADMIN_TOKEN: ${VAULTWARDEN_ADMIN_TOKEN}
+      WEBSOCKET_ENABLED: "true"
+    volumes:
+      - vaultwarden-data:/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.vaultwarden.rule=Host(`vault.${DOMAIN}`)"
+      - "traefik.http.routers.vaultwarden.entrypoints=websecure"
+      - "traefik.http.routers.vaultwarden.tls=true"
+      - "traefik.http.middlewares.vaultwarden-headers.headers.customResponseHeaders.X-Frame-Options="
+      - "traefik.http.middlewares.vaultwarden-headers.headers.customResponseHeaders.Content-Security-Policy=frame-ancestors 'self' https://os.${DOMAIN}"
+      - "traefik.http.routers.vaultwarden.middlewares=vaultwarden-headers"
+      - "traefik.http.services.vaultwarden.loadbalancer.server.port=80"
+    networks:
+      - scalenix
+
+  # ─── code-server (VS Code in browser) ──────────────────
+  code-server:
+    image: codercom/code-server:latest
+    restart: unless-stopped
+    environment:
+      PASSWORD: ${CODE_SERVER_PASSWORD}
+    volumes:
+      - code-server-data:/home/coder
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.code-server.rule=Host(`code.${DOMAIN}`)"
+      - "traefik.http.routers.code-server.entrypoints=websecure"
+      - "traefik.http.routers.code-server.tls=true"
+      - "traefik.http.middlewares.code-server-headers.headers.customResponseHeaders.X-Frame-Options="
+      - "traefik.http.middlewares.code-server-headers.headers.customResponseHeaders.Content-Security-Policy=frame-ancestors 'self' https://os.${DOMAIN}"
+      - "traefik.http.routers.code-server.middlewares=code-server-headers"
+      - "traefik.http.services.code-server.loadbalancer.server.port=8080"
+    networks:
+      - scalenix
+
+  # ─── Chromium Browser (Selkies-GStreamer WebRTC) ───────
+  chromium:
+    image: lscr.io/linuxserver/chromium:latest
+    container_name: scalenix-chromium
+    restart: unless-stopped
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: Europe/Paris
+      CHROME_CLI: "https://www.google.com"
+      CUSTOM_USER: ""
+      PASSWORD: ""
+      NO_DECOR: "true"
+      CUSTOM_PORT: "3000"
+      CUSTOM_HTTPS_PORT: "3001"
+    volumes:
+      - chromium-data:/config
+    shm_size: "1gb"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.chromium.rule=Host(`browser.${DOMAIN}`)"
+      - "traefik.http.routers.chromium.entrypoints=websecure"
+      - "traefik.http.routers.chromium.tls=true"
+      - "traefik.http.middlewares.chromium-headers.headers.customResponseHeaders.X-Frame-Options="
+      - "traefik.http.middlewares.chromium-headers.headers.customResponseHeaders.Content-Security-Policy=frame-ancestors 'self' https://os.${DOMAIN}"
+      - "traefik.http.middlewares.chromium-headers.headers.customResponseHeaders.Permissions-Policy=camera=*, microphone=*, display-capture=*"
+      - "traefik.http.routers.chromium.middlewares=chromium-headers"
+      - "traefik.http.services.chromium.loadbalancer.server.port=3000"
+    networks:
+      - scalenix
+
+  # ─── Excalidraw (Collaborative whiteboard) ─────────────
+  excalidraw:
+    image: excalidraw/excalidraw:latest
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.excalidraw.rule=Host(`draw.${DOMAIN}`)"
+      - "traefik.http.routers.excalidraw.entrypoints=websecure"
+      - "traefik.http.routers.excalidraw.tls=true"
+      - "traefik.http.middlewares.excalidraw-headers.headers.customResponseHeaders.X-Frame-Options="
+      - "traefik.http.middlewares.excalidraw-headers.headers.customResponseHeaders.Content-Security-Policy=frame-ancestors 'self' https://os.${DOMAIN}"
+      - "traefik.http.routers.excalidraw.middlewares=excalidraw-headers"
+      - "traefik.http.services.excalidraw.loadbalancer.server.port=80"
+    networks:
+      - scalenix
+
+volumes:
+  pg-keycloak-data:
+  pg-nextcloud-data:
+  nextcloud-data:
+  onlyoffice-data:
+  grist-data:
+  traefik-certs:
+  pg-synapse-data:
+  synapse-data:
+  pg-outline-data:
+  outline-data:
+  mysql-ghost-data:
+  ghost-data:
+  jellyfin-config:
+  jellyfin-cache:
+  jellyfin-media:
+  immich-upload:
+  immich-model-cache:
+  pg-immich-data:
+  vaultwarden-data:
+  chromium-data:
+  code-server-data:
+
+networks:
+  scalenix:
+    driver: bridge

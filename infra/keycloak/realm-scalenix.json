@@ -1,0 +1,217 @@
+{
+  "realm": "scalenix-os",
+  "enabled": true,
+  "displayName": "ScalenixOS",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": false,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "passwordPolicy": "",
+  "roles": {
+    "realm": [
+      {
+        "name": "user",
+        "description": "Standard user - access to mail, files, editor"
+      },
+      {
+        "name": "developer",
+        "description": "Developer - access to terminal Linux"
+      },
+      {
+        "name": "admin",
+        "description": "Administrator - full access"
+      }
+    ]
+  },
+  "groups": [
+    {
+      "name": "scalenix-users",
+      "realmRoles": ["user"]
+    },
+    {
+      "name": "scalenix-devs",
+      "realmRoles": ["user", "developer"]
+    },
+    {
+      "name": "scalenix-admins",
+      "realmRoles": ["user", "developer", "admin"]
+    }
+  ],
+  "defaultGroups": ["/scalenix-users"],
+  "clients": [
+    {
+      "clientId": "scalenix-shell",
+      "name": "ScalenixOS Shell",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "rootUrl": "https://os.scalenix.fr",
+      "baseUrl": "/",
+      "redirectUris": ["https://os.scalenix.fr/*", "http://localhost:3000/*"],
+      "webOrigins": ["https://os.scalenix.fr", "http://localhost:3000", "+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "fullScopeAllowed": true
+    },
+    {
+      "clientId": "nextcloud",
+      "name": "Nextcloud",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "secret": "changeme",
+      "rootUrl": "https://files.scalenix.fr",
+      "redirectUris": ["https://files.scalenix.fr/*"],
+      "webOrigins": ["https://files.scalenix.fr"],
+      "fullScopeAllowed": true
+    },
+    {
+      "clientId": "zimbra",
+      "name": "Zimbra",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "secret": "changeme",
+      "rootUrl": "https://mail.scalenix.fr",
+      "redirectUris": ["https://mail.scalenix.fr/*"],
+      "webOrigins": ["https://mail.scalenix.fr"],
+      "fullScopeAllowed": true
+    },
+    {
+      "clientId": "oauth2-proxy",
+      "name": "OAuth2 Proxy",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "secret": "changeme",
+      "redirectUris": ["https://terminal.scalenix.fr/oauth2/callback", "https://libreoffice.scalenix.fr/oauth2/callback"],
+      "webOrigins": ["https://terminal.scalenix.fr", "https://libreoffice.scalenix.fr"],
+      "fullScopeAllowed": true,
+      "protocolMappers": [
+        {
+          "name": "oauth2-proxy-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "oauth2-proxy",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "guacamole",
+      "name": "Apache Guacamole",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "secret": "changeme",
+      "rootUrl": "https://rdp.scalenix.fr",
+      "redirectUris": ["https://rdp.scalenix.fr/*"],
+      "webOrigins": ["https://rdp.scalenix.fr"],
+      "fullScopeAllowed": true
+    }
+  ],
+  "clientScopeMappings": {
+    "scalenix-shell": [
+      { "client": "scalenix-shell", "roles": ["user", "developer", "admin"] }
+    ]
+  },
+  "users": [
+    {
+      "username": "malik",
+      "email": "malik@scalenix.fr",
+      "firstName": "Malik",
+      "lastName": "Benmekki",
+      "enabled": true,
+      "emailVerified": true,
+      "realmRoles": ["user", "developer", "admin", "default-roles-scalenix-os"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "changeme",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "alice",
+      "email": "alice@scalenix.fr",
+      "firstName": "Alice",
+      "lastName": "Martin",
+      "enabled": true,
+      "emailVerified": true,
+      "realmRoles": ["user", "developer", "default-roles-scalenix-os"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "changeme",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "bob",
+      "email": "bob@scalenix.fr",
+      "firstName": "Bob",
+      "lastName": "Dupont",
+      "enabled": true,
+      "emailVerified": true,
+      "realmRoles": ["user", "default-roles-scalenix-os"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "changeme",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "claire",
+      "email": "claire@scalenix.fr",
+      "firstName": "Claire",
+      "lastName": "Leroy",
+      "enabled": true,
+      "emailVerified": true,
+      "realmRoles": ["user", "default-roles-scalenix-os"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "changeme",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "david",
+      "email": "david@scalenix.fr",
+      "firstName": "David",
+      "lastName": "Moreau",
+      "enabled": true,
+      "emailVerified": true,
+      "realmRoles": ["user", "developer", "default-roles-scalenix-os"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "changeme",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}
