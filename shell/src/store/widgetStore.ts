@@ -82,28 +82,34 @@ export const useWidgetStore = create<WidgetStore>((set, get) => ({
         }
       }
     } catch { /* corrupted */ }
-    // First launch: create default widgets
+    // First launch: create default widgets — right-aligned column layout
+    const sw = typeof window !== 'undefined' ? window.innerWidth : 1440;
+    const gap = 16;
+    const col1X = sw - 300 - 24;       // Right column
+    const col2X = sw - 300 - 280 - 40; // Second column (left of right)
+
     const defaults: Widget[] = [
-      { id: 'default-clock', type: 'clock', x: 40, y: 30, w: 260, h: 140, visible: true, data: {} },
-      { id: 'default-monitor', type: 'system-monitor', x: 40, y: 190, w: 240, h: 180, visible: true, data: {} },
-      { id: 'default-sticky', type: 'sticky-note', x: 320, y: 30, w: 220, h: 200, visible: true, data: { content: 'Bienvenue sur ScalenixOS !\n\nDouble-cliquez le bureau pour ouvrir le launcher.', color: 'yellow' } },
+      // Right column: Clock → Calendar → Chat
+      { id: 'default-clock', type: 'clock', x: col1X, y: 20, w: 280, h: 140, visible: true, data: {} },
+      { id: 'default-calendar', type: 'calendar', x: col1X, y: 20 + 140 + gap, w: 280, h: 300, visible: true, data: {} },
+      { id: 'default-chat', type: 'matrix-chat', x: col1X, y: 20 + 140 + gap + 300 + gap, w: 280, h: 280, visible: true, data: {} },
+
+      // Second column: Sticky Note → Todo → System Monitor
+      { id: 'default-sticky', type: 'sticky-note', x: col2X, y: 20, w: 240, h: 180, visible: true, data: { content: 'Welcome to ScaleNix OS!\n\nUse the launcher to open apps.\nCtrl+K for quick search.', color: 'yellow' } },
       {
-        id: 'default-todo', type: 'todo-list', x: 560, y: 30, w: 260, h: 320, visible: true,
+        id: 'default-todo', type: 'todo-list', x: col2X, y: 20 + 180 + gap, w: 260, h: 320, visible: true,
         data: {
           items: [
-            { id: 't1', text: 'Configurer le VPN pour les acces distants', done: false },
-            { id: 't2', text: 'Valider la migration PostgreSQL v16', done: false },
-            { id: 't3', text: 'Relire la PR du module Nextcloud', done: false },
-            { id: 't4', text: 'Planifier la reunion sprint Mars', done: false },
-            { id: 't5', text: 'Tester le SSO Keycloak sur mobile', done: false },
-            { id: 't6', text: 'Mettre a jour les certificats TLS', done: true },
-            { id: 't7', text: 'Deployer le reverse proxy Traefik v3', done: true },
-            { id: 't8', text: 'Rediger la doc API interne', done: false },
-            { id: 't9', text: 'Corriger le bug WebDAV upload > 100Mo', done: false },
-            { id: 't10', text: 'Preparer la demo client vendredi', done: false },
+            { id: 't1', text: 'Configure VPN for remote access', done: false },
+            { id: 't2', text: 'Review Nextcloud module PR', done: false },
+            { id: 't3', text: 'Test Keycloak SSO on mobile', done: false },
+            { id: 't4', text: 'Update TLS certificates', done: true },
+            { id: 't5', text: 'Deploy Traefik v3 reverse proxy', done: true },
+            { id: 't6', text: 'Prepare client demo', done: false },
           ],
         },
       },
+      { id: 'default-monitor', type: 'system-monitor', x: col2X, y: 20 + 180 + gap + 320 + gap, w: 260, h: 180, visible: true, data: {} },
     ];
     set({ widgets: defaults });
     persist(defaults);
