@@ -281,6 +281,41 @@
       border-top: 1px solid rgba(255, 255, 255, 0.05);
       border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     }
+    /* ─── VIDEO PLAYER ─── */
+    .video-container {
+      max-width: 1000px;
+      margin: 0 auto 3rem;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+      position: relative;
+    }
+    .video-container video {
+      width: 100%;
+      display: block;
+      border-radius: 16px;
+    }
+    .video-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.9rem;
+      color: #64748b;
+    }
+    .video-label .play-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(96, 165, 250, 0.2);
+      color: #60a5fa;
+      font-size: 0.6rem;
+    }
+
     .carousel {
       position: relative;
       max-width: 1000px;
@@ -615,6 +650,16 @@
       <p class="section-subtitle animate-on-scroll">
         A familiar desktop experience, entirely in the browser.
       </p>
+      <div class="video-label animate-on-scroll"><span class="play-icon">&#9654;</span> Watch the full demo</div>
+      <div class="video-container animate-on-scroll">
+        <video controls preload="metadata" poster="screenshots/01-desktop-clean.png">
+          <source src="video/demo.mp4" type="video/mp4" />
+          Your browser does not support the video tag.
+        </video>
+      </div>
+
+      <p class="section-subtitle" style="margin-top:2rem;">Or browse the screenshots below</p>
+
       <div class="carousel animate-on-scroll" id="carousel">
         <button class="carousel-btn prev" onclick="carouselPrev()">&larr;</button>
         <div class="carousel-track" id="carouselTrack">
