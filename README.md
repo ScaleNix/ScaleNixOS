@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="docs/screenshots/01-desktop.png" alt="ScaleNix OS Desktop" width="800" />
+  <video src="https://github.com/ScaleNix/ScaleNixOS/raw/main/docs/landing/video/demo.mp4" width="800" controls></video>
+</p>
+
+<p align="center">
+  <em>▶ Full demo — click to play</em>
 </p>
 
 <h1 align="center">ScaleNix OS</h1>
