@@ -82,11 +82,12 @@ export const useWidgetStore = create<WidgetStore>((set, get) => ({
         }
       }
     } catch { /* corrupted */ }
-    // First launch: create default widgets — right-aligned column layout
+    // First launch: create default widgets — right-aligned two-column layout
+    // Widgets must avoid the desktop icon grid (top-left ~400×400px area)
     const sw = typeof window !== 'undefined' ? window.innerWidth : 1440;
     const gap = 16;
-    const col1X = sw - 300 - 24;       // Right column
-    const col2X = sw - 300 - 280 - 40; // Second column (left of right)
+    const col1X = sw - 300 - 24;       // Right column (far right)
+    const col2X = Math.max(420, sw - 300 - 280 - 40); // Second column (clear of icons)
 
     const defaults: Widget[] = [
       // Right column: Clock → Calendar → Chat

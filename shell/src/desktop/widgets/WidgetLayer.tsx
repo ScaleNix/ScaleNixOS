@@ -128,7 +128,7 @@ export function WidgetLayer() {
   if (visibleWidgets.length === 0) return null;
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-0">
+    <div className="pointer-events-none absolute inset-0 z-[1]">
       {visibleWidgets.map((widget) => (
         <div key={widget.id} className="pointer-events-auto">
           <WidgetWrapper widget={widget} />

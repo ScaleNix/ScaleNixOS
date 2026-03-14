@@ -81,7 +81,7 @@ export function DesktopIcons() {
   }, [moveShortcut]);
 
   return (
-    <>
+    <div className="absolute inset-0 z-[2] pointer-events-none">
       {shortcuts.map((sc) => {
         // Check role access for app shortcuts
         if (sc.type === 'app' && sc.appId) {
@@ -97,7 +97,7 @@ export function DesktopIcons() {
         return (
           <button
             key={sc.id}
-            className="group absolute flex flex-col items-center gap-1 rounded-lg p-1.5 transition-colors hover:bg-white/5 active:bg-white/10"
+            className="group absolute flex flex-col items-center gap-1 rounded-lg p-1.5 transition-colors hover:bg-white/5 active:bg-white/10 pointer-events-auto"
             style={{ left: x, top: y, width: ICON_W }}
             onDoubleClick={() => handleOpen(sc)}
             onContextMenu={(e) => handleContextMenu(e, sc)}
@@ -112,6 +112,6 @@ export function DesktopIcons() {
           </button>
         );
       })}
-    </>
+    </div>
   );
 }
