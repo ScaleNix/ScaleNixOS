@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ScaleNix OS — Cloud Desktop Environment</title>
+  <meta name="description" content="A full-featured web desktop environment with 30+ apps, accessible from any browser. Self-hosted, open source, enterprise-ready." />
+  <style>
+    /* ═══════════════════════════════════════════════
+       RESET & BASE
+    ═══════════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; font-size: 16px; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #0a0a0f;
+      color: #e2e8f0;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    a { color: #60a5fa; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ═══════════════════════════════════════════════
+       ANIMATIONS
+    ═══════════════════════════════════════════════ */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(40px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes slideInLeft {
+      from { opacity: 0; transform: translateX(-60px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes slideInRight {
+      from { opacity: 0; transform: translateX(60px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    @keyframes gradientShift {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    @keyframes scaleIn {
+      from { opacity: 0; transform: scale(0.9); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    @keyframes glow {
+      0%, 100% { box-shadow: 0 0 20px rgba(96, 165, 250, 0.2); }
+      50% { box-shadow: 0 0 40px rgba(96, 165, 250, 0.4); }
+    }
+
+    .animate-on-scroll {
+      opacity: 0;
+      transform: translateY(40px);
+      transition: opacity 0.8s ease, transform 0.8s ease;
+    }
+    .animate-on-scroll.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ═══════════════════════════════════════════════
+       HERO
+    ═══════════════════════════════════════════════ */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      position: relative;
+      padding: 2rem;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 20% 50%, rgba(96, 165, 250, 0.08) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 20%, rgba(139, 92, 246, 0.06) 0%, transparent 60%),
+        radial-gradient(ellipse at 50% 80%, rgba(16, 185, 129, 0.05) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 1rem;
+      border-radius: 100px;
+      border: 1px solid rgba(96, 165, 250, 0.3);
+      background: rgba(96, 165, 250, 0.08);
+      font-size: 0.85rem;
+      color: #93c5fd;
+      margin-bottom: 2rem;
+      animation: fadeIn 1s ease 0.2s both;
+    }
+    .hero-badge .dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #22c55e;
+      animation: pulse 2s infinite;
+    }
+    .hero h1 {
+      font-size: clamp(2.5rem, 6vw, 5rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+      margin-bottom: 1.5rem;
+      animation: fadeInUp 1s ease 0.4s both;
+    }
+    .hero h1 .gradient {
+      background: linear-gradient(135deg, #60a5fa, #8b5cf6, #10b981);
+      background-size: 200% 200%;
+      animation: gradientShift 4s ease infinite;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      font-size: clamp(1.1rem, 2vw, 1.35rem);
+      color: #94a3b8;
+      max-width: 640px;
+      margin-bottom: 2.5rem;
+      animation: fadeInUp 1s ease 0.6s both;
+    }
+    .hero-actions {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      animation: fadeInUp 1s ease 0.8s both;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.85rem 1.8rem;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      color: white;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 40px rgba(59, 130, 246, 0.3);
+      text-decoration: none;
+    }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.06);
+      color: #e2e8f0;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      transform: translateY(-2px);
+      text-decoration: none;
+    }
+
+    .hero-screenshot {
+      margin-top: 4rem;
+      max-width: 1000px;
+      width: 100%;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+      animation: scaleIn 1.2s ease 1s both;
+    }
+    .hero-screenshot img {
+      width: 100%;
+      display: block;
+    }
+
+    /* ═══════════════════════════════════════════════
+       SECTIONS
+    ═══════════════════════════════════════════════ */
+    section { padding: 6rem 2rem; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .section-title {
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 800;
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    .section-subtitle {
+      text-align: center;
+      color: #94a3b8;
+      font-size: 1.15rem;
+      max-width: 600px;
+      margin: 0 auto 4rem;
+    }
+
+    /* ═══════════════════════════════════════════════
+       STATS BAR
+    ═══════════════════════════════════════════════ */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 2rem;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 3rem 2rem;
+    }
+    .stat {
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 2.5rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #60a5fa, #8b5cf6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .stat-label {
+      font-size: 0.9rem;
+      color: #64748b;
+      margin-top: 0.25rem;
+    }
+
+    /* ═══════════════════════════════════════════════
+       FEATURES GRID
+    ═══════════════════════════════════════════════ */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.5rem;
+    }
+    .feature-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 16px;
+      padding: 2rem;
+      transition: all 0.3s ease;
+    }
+    .feature-card:hover {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: rgba(96, 165, 250, 0.2);
+      transform: translateY(-4px);
+    }
+    .feature-icon {
+      font-size: 2rem;
+      margin-bottom: 1rem;
+      display: inline-block;
+      animation: float 3s ease infinite;
+    }
+    .feature-card h3 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    .feature-card p {
+      color: #94a3b8;
+      font-size: 0.95rem;
+    }
+
+    /* ═══════════════════════════════════════════════
+       SCREENSHOT SHOWCASE (CAROUSEL)
+    ═══════════════════════════════════════════════ */
+    .showcase {
+      background: rgba(255, 255, 255, 0.02);
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    /* ─── VIDEO PLAYER ─── */
+    .video-container {
+      max-width: 1000px;
+      margin: 0 auto 3rem;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 25px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+      position: relative;
+    }
+    .video-container video {
+      width: 100%;
+      display: block;
+      border-radius: 16px;
+    }
+    .video-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.9rem;
+      color: #64748b;
+    }
+    .video-label .play-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(96, 165, 250, 0.2);
+      color: #60a5fa;
+      font-size: 0.6rem;
+    }
+
+    .carousel {
+      position: relative;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    .carousel-track {
+      display: flex;
+      overflow: hidden;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .carousel-slide {
+      min-width: 100%;
+      position: relative;
+      transition: transform 0.6s ease;
+    }
+    .carousel-slide img {
+      width: 100%;
+      display: block;
+    }
+    .carousel-caption {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 2rem;
+      background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
+    }
+    .carousel-caption h3 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-bottom: 0.3rem;
+    }
+    .carousel-caption p {
+      color: #94a3b8;
+      font-size: 0.95rem;
+    }
+    .carousel-nav {
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-top: 1.5rem;
+    }
+    .carousel-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.15);
+      border: none;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .carousel-dot.active {
+      background: #60a5fa;
+      transform: scale(1.3);
+    }
+    .carousel-btn {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(0, 0, 0, 0.5);
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      font-size: 1.2rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2;
+    }
+    .carousel-btn:hover {
+      background: rgba(59, 130, 246, 0.5);
+    }
+    .carousel-btn.prev { left: -24px; }
+    .carousel-btn.next { right: -24px; }
+
+    /* ═══════════════════════════════════════════════
+       APP CATALOG
+    ═══════════════════════════════════════════════ */
+    .app-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 1rem;
+    }
+    .app-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1.5rem 1rem;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      transition: all 0.3s ease;
+      cursor: default;
+    }
+    .app-card:hover {
+      background: rgba(255, 255, 255, 0.07);
+      transform: translateY(-4px);
+      border-color: var(--app-color, rgba(96, 165, 250, 0.3));
+    }
+    .app-icon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+    .app-name {
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-align: center;
+    }
+    .app-type {
+      font-size: 0.7rem;
+      color: #64748b;
+      margin-top: 0.2rem;
+    }
+
+    .cat-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 1.5rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid rgba(255, 255, 255, 0.06);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .cat-count {
+      background: rgba(96, 165, 250, 0.15);
+      color: #93c5fd;
+      font-size: 0.75rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 100px;
+    }
+    .cat-section + .cat-section { margin-top: 3rem; }
+
+    /* ═══════════════════════════════════════════════
+       TECH STACK
+    ═══════════════════════════════════════════════ */
+    .tech-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+    .tech-card {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 1.2rem;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      transition: all 0.3s ease;
+    }
+    .tech-card:hover {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(96, 165, 250, 0.2);
+    }
+    .tech-badge {
+      padding: 0.3rem 0.6rem;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .tech-name {
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    /* ═══════════════════════════════════════════════
+       CTA
+    ═══════════════════════════════════════════════ */
+    .cta {
+      text-align: center;
+      padding: 6rem 2rem;
+      position: relative;
+    }
+    .cta::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at center, rgba(96, 165, 250, 0.06), transparent 70%);
+      pointer-events: none;
+    }
+    .cta h2 {
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 800;
+      margin-bottom: 1rem;
+    }
+    .cta p {
+      color: #94a3b8;
+      font-size: 1.15rem;
+      max-width: 500px;
+      margin: 0 auto 2rem;
+    }
+
+    /* ═══════════════════════════════════════════════
+       FOOTER
+    ═══════════════════════════════════════════════ */
+    footer {
+      padding: 3rem 2rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      text-align: center;
+      color: #475569;
+      font-size: 0.9rem;
+    }
+    footer a { color: #64748b; }
+    footer .footer-links {
+      display: flex;
+      gap: 2rem;
+      justify-content: center;
+      margin-bottom: 1.5rem;
+    }
+
+    /* ═══════════════════════════════════════════════
+       RESPONSIVE
+    ═══════════════════════════════════════════════ */
+    @media (max-width: 768px) {
+      .carousel-btn { display: none; }
+      .features-grid { grid-template-columns: 1fr; }
+      .hero-screenshot { margin-top: 2rem; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      footer .footer-links { flex-direction: column; gap: 0.75rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ════════════════ HERO ════════════════ -->
+  <section class="hero">
+    <div class="hero-badge">
+      <span class="dot"></span>
+      Open Source &bull; Self-Hosted &bull; LGPL-2.0
+    </div>
+    <h1>
+      Your workspace,<br />
+      <span class="gradient">in one tab.</span>
+    </h1>
+    <p>
+      ScaleNix OS is a cloud desktop environment with 30+ integrated apps, accessible from any browser.
+      Email, files, chat, video, documents &mdash; unified behind a single sign-on.
+    </p>
+    <div class="hero-actions">
+      <a href="https://github.com/ScaleNix/ScaleNixOS" class="btn btn-primary">
+        View on GitHub
+      </a>
+      <a href="https://github.com/ScaleNix/ScaleNixOS/blob/main/docs/ADMIN.md" class="btn btn-secondary">
+        Deploy Now
+      </a>
+    </div>
+    <div class="hero-screenshot">
+      <img src="landing/screenshots/01-desktop-clean.png"
+           onerror="this.src='screenshots/01-desktop.png'"
+           alt="ScaleNix OS Desktop" />
+    </div>
+  </section>
+
+  <!-- ════════════════ STATS ════════════════ -->
+  <div class="stats animate-on-scroll">
+    <div class="stat">
+      <div class="stat-value">30+</div>
+      <div class="stat-label">Applications</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">5</div>
+      <div class="stat-label">Languages</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">15</div>
+      <div class="stat-label">Desktop Widgets</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">35+</div>
+      <div class="stat-label">E2E Tests</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">20+</div>
+      <div class="stat-label">Docker Services</div>
+    </div>
+  </div>
+
+  <!-- ════════════════ FEATURES ════════════════ -->
+  <section>
+    <div class="container">
+      <h2 class="section-title animate-on-scroll">Everything you need, built in.</h2>
+      <p class="section-subtitle animate-on-scroll">
+        A complete desktop experience with enterprise-grade applications, all behind a single sign-on.
+      </p>
+      <div class="features-grid">
+        <div class="feature-card animate-on-scroll">
+          <span class="feature-icon">🪟</span>
+          <h3>Window Manager</h3>
+          <p>Drag, resize, snap, minimize, maximize, Alt+Tab, Picture-in-Picture. Just like a real desktop.</p>
+        </div>
+        <div class="feature-card animate-on-scroll">
+          <span class="feature-icon">🔐</span>
+          <h3>Single Sign-On</h3>
+          <p>Keycloak OIDC with PKCE. One login for all apps. Role-based access control (user, developer, admin).</p>
+        </div>
+        <div class="feature-card animate-on-scroll">
+          <span class="feature-icon">🌍</span>
+          <h3>5 Languages</h3>
+          <p>French, English, Italian, Spanish, German. 560+ translation keys per language. Switchable instantly.</p>
+        </div>
+        <div class="feature-card animate-on-scroll">
+          <span class="feature-icon">🎨</span>
+          <h3>Themes & Widgets</h3>
+          <p>Dark and light mode with auto scheduling. 15 desktop widgets. Custom wallpapers and accent colors.</p>
+        </div>
+        <div class="feature-card animate-on-scroll">
+          <span class="feature-icon">⚡</span>
+          <h3>Spotlight Search</h3>
+          <p>Ctrl+K to find and launch any app instantly. Search by name, description, or category.</p>
+        </div>
+        <div class="feature-card animate-on-scroll">
+          <span class="feature-icon">🐳</span>
+          <h3>Docker Compose</h3>
+          <p>Full stack in one command. Traefik v3 reverse proxy, TLS, 20+ services. Production-ready.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ SHOWCASE ════════════════ -->
+  <section class="showcase">
+    <div class="container">
+      <h2 class="section-title animate-on-scroll">See it in action</h2>
+      <p class="section-subtitle animate-on-scroll">
+        A familiar desktop experience, entirely in the browser.
+      </p>
+      <div class="video-label animate-on-scroll"><span class="play-icon">&#9654;</span> Watch the full demo</div>
+      <div class="video-container animate-on-scroll">
+        <video controls preload="metadata" poster="screenshots/01-desktop-clean.png">
+          <source src="landing/video/demo.mp4" type="video/mp4" />
+          Your browser does not support the video tag.
+        </video>
+      </div>
+
+      <p class="section-subtitle" style="margin-top:2rem;">Or browse the screenshots below</p>
+
+      <div class="carousel animate-on-scroll" id="carousel">
+        <button class="carousel-btn prev" onclick="carouselPrev()">&larr;</button>
+        <div class="carousel-track" id="carouselTrack">
+          <div class="carousel-slide">
+            <img src="landing/screenshots/02-desktop-widgets.png" onerror="this.src='screenshots/01-desktop.png'" alt="Desktop" />
+            <div class="carousel-caption"><h3>Desktop with Widgets</h3><p>Clock, calendar, chat preview, todo list, and system monitor.</p></div>
+          </div>
+          <div class="carousel-slide">
+            <img src="landing/screenshots/04-launcher-full.png" onerror="this.src='screenshots/02-launcher.png'" alt="Launcher" />
+            <div class="carousel-caption"><h3>App Launcher</h3><p>30+ apps organized by category. Search, pin, and launch.</p></div>
+          </div>
+          <div class="carousel-slide">
+            <img src="landing/screenshots/20-file-explorer.png" onerror="this.src='screenshots/03-file-explorer.png'" alt="Files" />
+            <div class="carousel-caption"><h3>File Explorer</h3><p>Nextcloud-powered file management with drag & drop upload.</p></div>
+          </div>
+          <div class="carousel-slide">
+            <img src="landing/screenshots/40-zimbra-mail.png" onerror="this.src='screenshots/04-mail.png'" alt="Mail" />
+            <div class="carousel-caption"><h3>Email</h3><p>Zimbra Webmail with SSO preauth. Full-featured email client.</p></div>
+          </div>
+          <div class="carousel-slide">
+            <img src="landing/screenshots/23-kanban.png" onerror="this.src='screenshots/06-kanban.png'" alt="Kanban" />
+            <div class="carousel-caption"><h3>Kanban Board</h3><p>Task management with drag & drop cards and columns.</p></div>
+          </div>
+          <div class="carousel-slide">
+            <img src="landing/screenshots/60-multi-window.png" onerror="this.src='screenshots/10-multi-window.png'" alt="Multi-window" />
+            <div class="carousel-caption"><h3>Multi-Window</h3><p>Multiple apps side by side, just like a real desktop.</p></div>
+          </div>
+          <div class="carousel-slide">
+            <img src="landing/screenshots/24-settings.png" onerror="this.src='screenshots/07-settings.png'" alt="Settings" />
+            <div class="carousel-caption"><h3>Settings</h3><p>Theme, language, wallpaper, shortcuts &mdash; fully customizable.</p></div>
+          </div>
+          <div class="carousel-slide">
+            <img src="landing/screenshots/22-text-editor.png" alt="Text Editor" />
+            <div class="carousel-caption"><h3>Text Editor</h3><p>Monaco-powered code editor with syntax highlighting and multiple tabs.</p></div>
+          </div>
+          <div class="carousel-slide">
+            <img src="landing/screenshots/06-spotlight-search.png" alt="Spotlight" />
+            <div class="carousel-caption"><h3>Spotlight Search</h3><p>Ctrl+K to search apps, files, contacts, and shortcuts instantly.</p></div>
+          </div>
+          <div class="carousel-slide">
+            <img src="landing/screenshots/81-light-desktop.png" alt="Light Theme" />
+            <div class="carousel-caption"><h3>Light Theme</h3><p>Switch between dark and light themes with a single click.</p></div>
+          </div>
+          <div class="carousel-slide">
+            <img src="landing/screenshots/62-alt-tab.png" alt="Alt+Tab" />
+            <div class="carousel-caption"><h3>Alt+Tab Switcher</h3><p>Switch between windows instantly, just like a native desktop.</p></div>
+          </div>
+          <div class="carousel-slide">
+            <img src="landing/screenshots/70-widgets-default.png" alt="Widgets" />
+            <div class="carousel-caption"><h3>Desktop Widgets</h3><p>15 widget types: weather, pomodoro, chat, calendar, and more.</p></div>
+          </div>
+          <div class="carousel-slide">
+            <img src="landing/screenshots/21-calculator.png" alt="Calculator" />
+            <div class="carousel-caption"><h3>Calculator</h3><p>Scientific calculator with history and keyboard support.</p></div>
+          </div>
+          <div class="carousel-slide">
+            <img src="landing/screenshots/12-onboarding-step1.png" alt="Onboarding" />
+            <div class="carousel-caption"><h3>Guided Onboarding</h3><p>Step-by-step welcome tour for new users.</p></div>
+          </div>
+          <div class="carousel-slide">
+            <img src="landing/screenshots/90-launcher-german.png" alt="i18n" />
+            <div class="carousel-caption"><h3>5 Languages</h3><p>Full i18n: French, English, Italian, Spanish, and German.</p></div>
+          </div>
+        </div>
+        <button class="carousel-btn next" onclick="carouselNext()">&rarr;</button>
+        <div class="carousel-nav" id="carouselNav"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ APP CATALOG ════════════════ -->
+  <section>
+    <div class="container">
+      <h2 class="section-title animate-on-scroll">30+ integrated applications</h2>
+      <p class="section-subtitle animate-on-scroll">
+        Enterprise apps behind a single sign-on. Native React apps and embedded services.
+      </p>
+
+      <div class="cat-section animate-on-scroll">
+        <div class="cat-title">💬 Communication <span class="cat-count">5</span></div>
+        <div class="app-grid">
+          <div class="app-card" style="--app-color: #c0392b44"><span class="app-icon">✉️</span><span class="app-name">Email</span><span class="app-type">Zimbra</span></div>
+          <div class="app-card" style="--app-color: #8e44ad44"><span class="app-icon">📅</span><span class="app-name">Calendar</span><span class="app-type">Zimbra</span></div>
+          <div class="app-card" style="--app-color: #0dbd8b44"><span class="app-icon">💬</span><span class="app-name">Chat</span><span class="app-type">Matrix</span></div>
+          <div class="app-card" style="--app-color: #1f9cb444"><span class="app-icon">📹</span><span class="app-name">Video</span><span class="app-type">LiveKit</span></div>
+          <div class="app-card" style="--app-color: #6366f144"><span class="app-icon">👥</span><span class="app-name">Directory</span><span class="app-type">Native</span></div>
+        </div>
+      </div>
+
+      <div class="cat-section animate-on-scroll">
+        <div class="cat-title">📊 Productivity <span class="cat-count">7</span></div>
+        <div class="app-grid">
+          <div class="app-card" style="--app-color: #0082c944"><span class="app-icon">📁</span><span class="app-name">Files</span><span class="app-type">Nextcloud</span></div>
+          <div class="app-card" style="--app-color: #27ae6044"><span class="app-icon">📝</span><span class="app-name">Office</span><span class="app-type">OnlyOffice</span></div>
+          <div class="app-card" style="--app-color: #e67e2244"><span class="app-icon">📊</span><span class="app-name">Spreadsheets</span><span class="app-type">Grist</span></div>
+          <div class="app-card" style="--app-color: #0366d644"><span class="app-icon">📝</span><span class="app-name">Wiki</span><span class="app-type">Outline</span></div>
+          <div class="app-card" style="--app-color: #15171a44"><span class="app-icon">✍️</span><span class="app-name">Blog</span><span class="app-type">Ghost</span></div>
+          <div class="app-card" style="--app-color: #4361ee44"><span class="app-icon">📋</span><span class="app-name">Kanban</span><span class="app-type">Native</span></div>
+          <div class="app-card" style="--app-color: #6965db44"><span class="app-icon">🎨</span><span class="app-name">Whiteboard</span><span class="app-type">Excalidraw</span></div>
+        </div>
+      </div>
+
+      <div class="cat-section animate-on-scroll">
+        <div class="cat-title">🛠️ Tools <span class="cat-count">10</span></div>
+        <div class="app-grid">
+          <div class="app-card" style="--app-color: #1abc9c44"><span class="app-icon">💻</span><span class="app-name">Terminal</span><span class="app-type">Xpra</span></div>
+          <div class="app-card" style="--app-color: #007acc44"><span class="app-icon">💻</span><span class="app-name">Code</span><span class="app-type">VS Code</span></div>
+          <div class="app-card" style="--app-color: #4361ee44"><span class="app-icon">🌐</span><span class="app-name">Browser</span><span class="app-type">Chromium</span></div>
+          <div class="app-card" style="--app-color: #6366f144"><span class="app-icon">🧮</span><span class="app-name">Calculator</span><span class="app-type">Native</span></div>
+          <div class="app-card" style="--app-color: #0ea5e944"><span class="app-icon">🌍</span><span class="app-name">World Clock</span><span class="app-type">Native</span></div>
+          <div class="app-card" style="--app-color: #f59e0b44"><span class="app-icon">✏️</span><span class="app-name">Text Editor</span><span class="app-type">Native</span></div>
+          <div class="app-card" style="--app-color: #8b5cf644"><span class="app-icon">📷</span><span class="app-name">Screenshot</span><span class="app-type">Native</span></div>
+          <div class="app-card" style="--app-color: #06b6d444"><span class="app-icon">📋</span><span class="app-name">Clipboard</span><span class="app-type">Native</span></div>
+          <div class="app-card" style="--app-color: #10b98144"><span class="app-icon">🔊</span><span class="app-name">Audio</span><span class="app-type">Native</span></div>
+          <div class="app-card" style="--app-color: #175ddc44"><span class="app-icon">🔐</span><span class="app-name">Passwords</span><span class="app-type">Vaultwarden</span></div>
+        </div>
+      </div>
+
+      <div class="cat-section animate-on-scroll">
+        <div class="cat-title">🎬 Multimedia &amp; System <span class="cat-count">9</span></div>
+        <div class="app-grid">
+          <div class="app-card" style="--app-color: #00a4dc44"><span class="app-icon">🎬</span><span class="app-name">Media</span><span class="app-type">Jellyfin</span></div>
+          <div class="app-card" style="--app-color: #4250af44"><span class="app-icon">🖼️</span><span class="app-name">Photos</span><span class="app-type">Immich</span></div>
+          <div class="app-card" style="--app-color: #64748b44"><span class="app-icon">⚙️</span><span class="app-name">Settings</span><span class="app-type">Native</span></div>
+          <div class="app-card" style="--app-color: #6366f144"><span class="app-icon">🛍️</span><span class="app-name">App Store</span><span class="app-type">Native</span></div>
+          <div class="app-card" style="--app-color: #10b98144"><span class="app-icon">📊</span><span class="app-name">Task Manager</span><span class="app-type">Native</span></div>
+          <div class="app-card" style="--app-color: #8b5cf644"><span class="app-icon">🪩</span><span class="app-name">Widgets</span><span class="app-type">Native</span></div>
+          <div class="app-card" style="--app-color: #ef444444"><span class="app-icon">🗑️</span><span class="app-name">Trash</span><span class="app-type">Native</span></div>
+          <div class="app-card" style="--app-color: #8b5cf644"><span class="app-icon">👤</span><span class="app-name">Profile</span><span class="app-type">Native</span></div>
+          <div class="app-card" style="--app-color: #2c3e5044"><span class="app-icon">🔑</span><span class="app-name">Admin IAM</span><span class="app-type">Keycloak</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ TECH STACK ════════════════ -->
+  <section style="background: rgba(255,255,255,0.01);">
+    <div class="container">
+      <h2 class="section-title animate-on-scroll">Built with modern tech</h2>
+      <p class="section-subtitle animate-on-scroll">Production-ready stack, fully containerized.</p>
+      <div class="tech-grid animate-on-scroll">
+        <div class="tech-card"><span class="tech-badge" style="background:#61dafb22;color:#61dafb">React 18</span><span class="tech-name">Frontend</span></div>
+        <div class="tech-card"><span class="tech-badge" style="background:#3178c622;color:#3178c6">TypeScript</span><span class="tech-name">Type Safety</span></div>
+        <div class="tech-card"><span class="tech-badge" style="background:#38bdf822;color:#38bdf8">Tailwind v4</span><span class="tech-name">Styling</span></div>
+        <div class="tech-card"><span class="tech-badge" style="background:#f59e0b22;color:#f59e0b">Vite</span><span class="tech-name">Bundler</span></div>
+        <div class="tech-card"><span class="tech-badge" style="background:#a855f722;color:#a855f7">Zustand</span><span class="tech-name">State</span></div>
+        <div class="tech-card"><span class="tech-badge" style="background:#2496ed22;color:#2496ed">Docker</span><span class="tech-name">Containers</span></div>
+        <div class="tech-card"><span class="tech-badge" style="background:#22c55e22;color:#22c55e">Traefik v3</span><span class="tech-name">Proxy & TLS</span></div>
+        <div class="tech-card"><span class="tech-badge" style="background:#ef444422;color:#ef4444">Keycloak 24</span><span class="tech-name">Auth (OIDC)</span></div>
+        <div class="tech-card"><span class="tech-badge" style="background:#0082c922;color:#0082c9">Nextcloud</span><span class="tech-name">Files & WebDAV</span></div>
+        <div class="tech-card"><span class="tech-badge" style="background:#0dbd8b22;color:#0dbd8b">Matrix</span><span class="tech-name">Chat</span></div>
+        <div class="tech-card"><span class="tech-badge" style="background:#1f9cb422;color:#1f9cb4">LiveKit</span><span class="tech-name">Video (WebRTC)</span></div>
+        <div class="tech-card"><span class="tech-badge" style="background:#8b5cf622;color:#8b5cf6">Playwright</span><span class="tech-name">35+ E2E Tests</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════ CTA ════════════════ -->
+  <section class="cta">
+    <h2 class="animate-on-scroll">Ready to get started?</h2>
+    <p class="animate-on-scroll">Deploy your own cloud desktop in minutes.</p>
+    <div class="hero-actions animate-on-scroll">
+      <a href="https://github.com/ScaleNix/ScaleNixOS" class="btn btn-primary">
+        View on GitHub
+      </a>
+      <a href="https://github.com/ScaleNix/ScaleNixOS/blob/main/docs/DEVELOPER.md" class="btn btn-secondary">
+        Read the Docs
+      </a>
+      <a href="https://github.com/ScaleNix/ScaleNixOS/blob/main/CONTRIBUTING.md" class="btn btn-secondary">
+        Contribute
+      </a>
+    </div>
+  </section>
+
+  <!-- ════════════════ FOOTER ════════════════ -->
+  <footer>
+    <div class="footer-links">
+      <a href="https://github.com/ScaleNix/ScaleNixOS">GitHub</a>
+      <a href="https://github.com/ScaleNix/ScaleNixOS/blob/main/docs/DEVELOPER.md">Developer Guide</a>
+      <a href="https://github.com/ScaleNix/ScaleNixOS/blob/main/docs/ADMIN.md">Admin Guide</a>
+      <a href="https://github.com/ScaleNix/ScaleNixOS/blob/main/docs/USER.md">User Guide</a>
+      <a href="https://github.com/ScaleNix/ScaleNixOS/blob/main/CONTRIBUTING.md">Contributing</a>
+    </div>
+    <p>
+      Built by <a href="https://scalenix.fr">Scalenix</a> &mdash; Founded by Malik Benmekki
+      <br />
+      Licensed under <a href="https://github.com/ScaleNix/ScaleNixOS/blob/main/LICENSE">LGPL-2.0</a>
+    </p>
+  </footer>
+
+  <!-- ════════════════ SCRIPTS ════════════════ -->
+  <script>
+    // ── Intersection Observer for scroll animations ──
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+
+    document.querySelectorAll('.animate-on-scroll').forEach((el) => observer.observe(el));
+
+    // ── Carousel ──
+    let currentSlide = 0;
+    const track = document.getElementById('carouselTrack');
+    const slides = track.querySelectorAll('.carousel-slide');
+    const nav = document.getElementById('carouselNav');
+
+    // Create dots
+    slides.forEach((_, i) => {
+      const dot = document.createElement('button');
+      dot.className = 'carousel-dot' + (i === 0 ? ' active' : '');
+      dot.onclick = () => goToSlide(i);
+      nav.appendChild(dot);
+    });
+
+    function goToSlide(n) {
+      currentSlide = ((n % slides.length) + slides.length) % slides.length;
+      track.style.transform = `translateX(-${currentSlide * 100}%)`;
+      nav.querySelectorAll('.carousel-dot').forEach((d, i) => {
+        d.classList.toggle('active', i === currentSlide);
+      });
+    }
+
+    function carouselNext() { goToSlide(currentSlide + 1); }
+    function carouselPrev() { goToSlide(currentSlide - 1); }
+
+    // Auto-advance every 5s
+    setInterval(carouselNext, 5000);
+
+    // Keyboard nav
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') carouselNext();
+      if (e.key === 'ArrowLeft') carouselPrev();
+    });
+
+    // Apply transform transition
+    track.style.transition = 'transform 0.6s ease';
+    slides.forEach(s => { s.style.flexShrink = '0'; });
+  </script>
+</body>
+</html>
